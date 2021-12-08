@@ -1,3 +1,7 @@
+package year2021.day06
+
+import readInput
+
 fun main() {
     fun calculateFishCount(timers: List<Int>, days: Int): Long {
         val timerCounts = LongArray(9)
@@ -25,8 +29,8 @@ fun main() {
             days = 256
         )
 
-    val testInput = readInput("Day06_test")
-    val input = readInput("Day06")
+    val testInput = readInput(2021, 6, "test")
+    val input = readInput(2021, 6)
 
     check(part1(testInput) == 5934L)
     println(part1(input))

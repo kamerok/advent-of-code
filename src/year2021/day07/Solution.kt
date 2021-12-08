@@ -1,3 +1,7 @@
+package year2021.day07
+
+import readInput
+
 fun main() {
     fun part1(input: List<String>): Int {
         val positions = input.first().split(",").map { it.toInt() }
@@ -40,8 +44,8 @@ fun main() {
         return fuel.minOf { it }
     }
 
-    val testInput = readInput("Day07_test")
-    val input = readInput("Day07")
+    val testInput = readInput(2021, 7, "test")
+    val input = readInput(2021, 7)
 
     check(part1(testInput) == 37)
     println(part1(input))

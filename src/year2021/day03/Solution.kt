@@ -1,3 +1,7 @@
+package year2021.day03
+
+import readInput
+
 fun main() {
 
     fun List<String>.mostFrequentBit(index: Int): Boolean {
@@ -41,8 +45,8 @@ fun main() {
         return oxygen * co2
     }
 
-    val testInput = readInput("Day03_test")
-    val input = readInput("Day03")
+    val testInput = readInput(2021, 3, "test")
+    val input = readInput(2021, 3)
 
     check(part1(testInput) == 198)
     println(part1(input))

@@ -1,3 +1,7 @@
+package year2021.day05
+
+import readInput
+
 fun main() {
     fun List<String>.parseLines() = this
         .map { it.split(" -> ") }
@@ -27,11 +31,14 @@ fun main() {
         .parseLines()
         .countIntersections()
 
-    check(part1(readInput("Day05_test")) == 5)
-    println(part1(readInput("Day05")))
+    val testInput = readInput(2021, 5, "test")
+    val input = readInput(2021, 5)
 
-    check(part2(readInput("Day05_test")) == 12)
-    println(part2(readInput("Day05")))
+    check(part1(testInput) == 5)
+    println(part1(input))
+
+    check(part2(testInput) == 12)
+    println(part2(input))
 }
 
 data class Point(val x: Int, val y: Int)

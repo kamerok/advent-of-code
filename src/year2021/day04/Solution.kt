@@ -1,3 +1,7 @@
+package year2021.day04
+
+import readInput
+
 fun main() {
     fun readNumbersAndCards(input: List<String>): Pair<List<Int>, List<Card>> {
         val numbers = input.first().split(",").map { it.toInt() }
@@ -39,11 +43,14 @@ fun main() {
         return lastWin?.let { it.first.uncheckedSum() * it.second } ?: 0
     }
 
-    check(part1(readInput("Day04_test")) == 4512)
-    println(part1(readInput("Day04")))
+    val testInput = readInput(2021, 4, "test")
+    val input = readInput(2021, 4)
 
-    check(part2(readInput("Day04_test")) == 1924)
-    println(part2(readInput("Day04")))
+    check(part1(testInput) == 4512)
+    println(part1(input))
+
+    check(part2(testInput) == 1924)
+    println(part2(input))
 }
 
 class Card(

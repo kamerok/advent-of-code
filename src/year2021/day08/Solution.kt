@@ -1,3 +1,7 @@
+package year2021.day08
+
+import readInput
+
 fun main() {
     fun part1(input: List<String>): Int =
         input
@@ -71,8 +75,8 @@ fun main() {
             }
     }
 
-    val testInput = readInput("Day08_test")
-    val input = readInput("Day08")
+    val testInput = readInput(2021, 8, "test")
+    val input = readInput(2021, 8)
 
     check(part1(testInput) == 26)
     println(part1(input))
