@@ -9,6 +9,7 @@ fun main() {
     check(part1("620080001611562C8802118E34") == 12)
     check(part1("C0015000016115A2E0802F182340") == 23)
     check(part1("A0016C880162017C3686B18A3D4780") == 31)
+    check(part1(input) == 877)
 
     println(part1(input))
 
@@ -20,62 +21,66 @@ fun main() {
     check(part2("F600BC2D8F") == 0L)
     check(part2("9C005AC2F8F0") == 0L)
     check(part2("9C0141080250320F1802104A08") == 1L)
+    check(part2(input) == 194435634456L)
 
     println(part2(input))
 }
 
 private fun part1(input: String): Int =
-    input.convert().parsePacket(0).first.sumOf { it.version }
+    input.convert().iterator().readPacket().sumOf { it.version }
 
-private fun part2(input: String): Long = input.convert().parsePacket(0).first.value
+private fun part2(input: String): Long = input.convert().iterator().readPacket().value
 
-private fun String.parsePacket(start: Int): Pair<Packet, Int> {
-    val version = substring(start, start + 3).toInt(2)
-    val typeId = substring(start + 3, start + 6).toInt(2)
+private fun CharIterator.readPacket(): Packet {
+    val version = readString(3).toInt(2)
+    val typeId = readString(3).toInt(2)
     return if (typeId == 4) {
-        val (value, newStart) = parseLiteralValue(start + 6)
-        LiteralValue(version, typeId, value) to newStart
+        val (value, size) = readLiteralValue()
+        LiteralValue(version, typeId, size + 6, value)
     } else {
-        val (packets, newStart) = parseOperatorPackets(start + 6)
-        Operation(version, typeId, packets) to newStart
+        val (packets, size) = readOperatorPackets()
+        Operation(version, typeId, size + 6, packets)
     }
 }
 
-private fun String.parseLiteralValue(startIndex: Int): Pair<Long, Int> {
+private fun CharIterator.readLiteralValue(): Pair<Long, Int> {
     val packets = mutableListOf<String>()
-    var start = startIndex
-    while (this[start] == '1') {
-        packets.add(substring(start + 1, start + 5))
-        start += 5
+    var size = 1
+    var flag = nextChar()
+    while (flag == '1') {
+        packets.add(readString(4))
+        flag = nextChar()
+        size += 5
     }
-    packets.add(substring(start + 1, start + 5))
-    start += 5
-    return packets.joinToString(separator = "").toLong(2) to start
+    packets.add(readString(4))
+    size += 4
+    return packets.joinToString(separator = "").toLong(2) to size
 }
 
-private fun String.parseOperatorPackets(startIndex: Int): Pair<List<Packet>, Int> {
-    val totalLengthType = this[startIndex] == '0'
+private fun CharIterator.readOperatorPackets(): Pair<List<Packet>, Int> {
+    var size = 1
+    val totalLengthType = nextChar() == '0'
     val packets = mutableListOf<Packet>()
-    var localStartIndex = startIndex + 1
     if (totalLengthType) {
-        val totalLength = substring(localStartIndex, localStartIndex + 15).toInt(2)
-        localStartIndex += 15
-        val estimatedNewIndex = localStartIndex + totalLength
-        while (localStartIndex != estimatedNewIndex) {
-            val (packet, index) = parsePacket(localStartIndex)
+        val totalPacketsLength = readString(15).toInt(2)
+        size += 15
+        var parsedSize = 0
+        while (totalPacketsLength > parsedSize) {
+            val packet = readPacket()
             packets.add(packet)
-            localStartIndex = index
+            size += packet.size
+            parsedSize += packet.size
         }
     } else {
-        val numberOfSubPackets = substring(localStartIndex, localStartIndex + 11).toInt(2)
-        localStartIndex += 11
+        val numberOfSubPackets = readString(11).toInt(2)
+        size += 11
         repeat(numberOfSubPackets) {
-            val (packet, index) = parsePacket(localStartIndex)
+            val packet = readPacket()
             packets.add(packet)
-            localStartIndex = index
+            size += packet.size
         }
     }
-    return packets to localStartIndex
+    return packets to size
 }
 
 private fun String.convert(): String = buildString {
@@ -83,6 +88,8 @@ private fun String.convert(): String = buildString {
         append(it.digitToInt(16).toString(2).padStart(4, '0'))
     }
 }
+
+private fun CharIterator.readString(n: Int) = buildString { repeat(n) { append(nextChar()) } }
 
 private fun Packet.sumOf(getValue: (Packet) -> Int): Int =
     when (this) {
@@ -92,7 +99,8 @@ private fun Packet.sumOf(getValue: (Packet) -> Int): Int =
 
 private sealed class Packet(
     open val version: Int,
-    open val typeId: Int
+    open val typeId: Int,
+    open val size: Int
 ) {
     abstract val value: Long
 }
@@ -100,8 +108,9 @@ private sealed class Packet(
 private data class Operation(
     override val version: Int,
     override val typeId: Int,
+    override val size: Int,
     val packets: List<Packet>
-) : Packet(version, typeId) {
+) : Packet(version, typeId, size) {
     override val value: Long
         get() = when (typeId) {
             0 -> packets.sumOf { it.value }
@@ -117,5 +126,6 @@ private data class Operation(
 private data class LiteralValue(
     override val version: Int = 0,
     override val typeId: Int = 0,
+    override val size: Int,
     override val value: Long
-) : Packet(version, typeId)
+) : Packet(version, typeId, size)
