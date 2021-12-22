@@ -9,28 +9,40 @@ fun main() {
     val testInput2 = readInput(2021, 22, "test_2").parse()
     val input = readInput(2021, 22).parse()
 
-    check(part1(testInput) == 590784)
+    check(part1(testInput).also { println(it) } == 590784L)
     println(part1(input))
 
-    check(part2(testInput2) == 2758514936282235)
+    check(part2(testInput2).also { println(it) } == 2758514936282235)
     println(part2(input))
 }
 
-private fun part1(input: List<Command>): Int {
+private fun part1(input: List<Command>): Long {
     val borders = Cube(-50..50, -50..50, -50..50)
-    val resultCube = Array(101) { Array(101) { BooleanArray(101) } }
-    input.forEach { command ->
-        command.cube.iterate(borders, map = { it + 50 }) { x, y, z ->
-            resultCube.getOrNull(x)?.getOrNull(y)?.getOrNull(z)
-                ?.also { resultCube[x][y][z] = command.isOn }
-        }
-    }
-    return resultCube.countTrue()
+    val cubes = findEnabledCuboids(input).also { println(it) }
+    return cubes.sumOf { (it and borders).volume }
 }
 
 private fun part2(input: List<Command>): Long {
+    val cubes = findEnabledCuboids(input)
+    return cubes.sumOf { it.volume }
+}
 
-    return 0
+private fun findEnabledCuboids(input: List<Command>): MutableSet<Cube> {
+    val cubes = mutableSetOf<Cube>()
+    input.forEach { command ->
+        val intersectCubes = cubes.filter { it.intersect(command.cube) }
+        val resultCubes = mutableListOf<Cube>()
+        intersectCubes.forEach { cube ->
+            resultCubes.addAll(
+                cube.splitBy(command.cube).also { println("$cube -> $it") }
+                    .filter { !it.intersect(command.cube) }
+            )
+        }
+        if (command.isOn) resultCubes.add(command.cube)
+        cubes.removeAll(intersectCubes.toSet())
+        cubes.addAll(resultCubes)
+    }
+    return cubes
 }
 
 private fun List<String>.parse(): List<Command> = map { line ->
@@ -49,24 +61,6 @@ private fun List<String>.parse(): List<Command> = map { line ->
     )
 }
 
-private fun Array<Array<BooleanArray>>.countTrue() =
-    sumOf { it.sumOf { it.count { it } } }
-
-private inline fun Cube.iterate(
-    borders: Cube,
-    map: (Int) -> Int = { it },
-    operation: (x: Int, y: Int, z: Int) -> Unit
-) {
-    val intersection = this and borders
-    intersection.xRange.forEach { x ->
-        intersection.yRange.forEach { y ->
-            intersection.zRange.forEach { z ->
-                operation(map(x), map(y), map(z))
-            }
-        }
-    }
-}
-
 private infix fun Cube.and(cube: Cube): Cube =
     Cube(
         xRange and cube.xRange,
@@ -81,12 +75,51 @@ private infix fun IntRange.and(range: IntRange) = when {
     else -> IntRange.EMPTY
 }
 
-private fun Cube.intersect(cube: Cube): Boolean = xRange.intersect(cube.xRange) ||
-        yRange.intersect(cube.yRange) ||
+private fun Cube.intersect(cube: Cube): Boolean = xRange.intersect(cube.xRange) &&
+        yRange.intersect(cube.yRange) &&
         zRange.intersect(cube.zRange)
 
 private fun IntRange.intersect(range: IntRange): Boolean =
     first <= range.last && last >= range.first
+
+private fun Cube.splitBy(cube: Cube): List<Cube> =
+    buildList {
+        val xSplits = xRange.splitBy(cube.xRange)
+        val ySplits = yRange.splitBy(cube.yRange)
+        val zSplits = zRange.splitBy(cube.zRange)
+        xSplits.forEach { x ->
+            ySplits.forEach { y ->
+                zSplits.forEach { z ->
+                    add(Cube(x, y, z))
+                }
+            }
+        }
+    }
+
+private fun IntRange.splitBy(range: IntRange): List<IntRange> = when {
+    intersect(range) -> when {
+        //---****---
+        range.first > first && range.last < last -> listOf(
+            (first until range.first),
+            (range),
+            ((range.last + 1)..last),
+        )
+        //***----
+        range.first <= first && range.last < last -> listOf(
+            (first .. range.last),
+            ((range.last + 1)..last),
+        )
+        //----**
+        range.first > first && range.last >= last -> listOf(
+            (first until range.first),
+            (range.first..last),
+        )
+        //******
+        else -> listOf(this)
+    }
+    //-------
+    else -> listOf(this)
+}.also { println("split $this by $range -> $it") }
 
 private data class Command(
     val isOn: Boolean,
@@ -98,7 +131,7 @@ private data class Cube(
     val yRange: IntRange,
     val zRange: IntRange
 ) {
-    val volume = (xRange.last - xRange.first).toLong() *
-            (yRange.last - yRange.first) *
-            (zRange.last - zRange.first)
+    val volume = (xRange.last + 1 - xRange.first).toLong() *
+            (yRange.last + 1 - yRange.first) *
+            (zRange.last + 1 - zRange.first)
 }
