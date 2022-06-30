@@ -1,8 +1,6 @@
 package year2021.day19
 
 import readInput
-import kotlin.math.max
-import kotlin.math.min
 
 fun main() {
     val simpleInput = readInput(2021, 19, "simple").parse()
@@ -20,13 +18,17 @@ private fun part1(scanners: List<Scanner>): Int {
     val knownScanners = mutableListOf(scanners.first())
     val unknownScanners = scanners.drop(1).toMutableList()
     while (unknownScanners.isNotEmpty()) {
-        unknownScanners.removeIf { scanner ->
-            val normalized = scanner.tryToNormalize(knownScanners)
-            if (normalized != null) {
-                knownScanners.add(normalized)
+        val known = knownScanners.toList()
+        val unknown = unknownScanners.toList()
+        unknown.forEach { scanner ->
+            known.forEach { reference ->
+                scanner.normalizeOrNull(reference)?.let { normalized ->
+                    unknownScanners.remove(scanner)
+                    knownScanners.add(normalized)
+                }
             }
-            normalized != null
         }
+        println("${unknownScanners.size} -> ${knownScanners.size}")
     }
     return knownScanners.allPoints().size
 }
@@ -40,12 +42,16 @@ private fun List<String>.parse(): List<Scanner> {
     val result = mutableListOf<Scanner>()
     val iterator = iterator()
     var scannerPoints = mutableListOf<Point>()
+    var id = 0
     while (iterator.hasNext()) {
         val line = iterator.next()
         when {
             line.isEmpty() -> {
-                result.add(Scanner(scannerPoints))
+                result.add(Scanner("$id", scannerPoints))
                 scannerPoints = mutableListOf()
+            }
+            line.startsWith("---") -> {
+                id = line.split(' ')[2].toInt()
             }
             !line.startsWith("---") -> {
                 val (x, y, z) = line.split(',').map { it.toInt() }
@@ -53,82 +59,125 @@ private fun List<String>.parse(): List<Scanner> {
             }
         }
     }
-    result.add(Scanner(scannerPoints))
+    result.add(Scanner("$id", scannerPoints))
     return result
 }
 
-private fun Scanner.tryToNormalize(scanners: List<Scanner>): Scanner? {
-    val knownPoints = scanners.allPoints()
-    knownPoints.iterate { knownTriangle ->
-        points.iterate { unknownTriangle ->
-            unknownTriangle.rotate { rotatedTriangle ->
-                val isPan = false
-                if (isPan) {
-                    //apply pan and rotation to scanner
-                }
-            }
+private fun Scanner.normalizeOrNull(reference: Scanner): Scanner? {
+    everyOrientation().forEach { orientedScanner ->
+        val translation = orientedScanner.findTranslationOrNull(reference)
+        if (translation != null) {
+            return orientedScanner.translate(translation)
         }
     }
     return null
+}
+
+private fun Scanner.findTranslationOrNull(reference: Scanner): Translation? {
+    val translationMap = mutableMapOf<Translation, Int>()
+    points.forEach { point ->
+        reference.points.forEach { refPoint ->
+            val translation = Translation(
+                refPoint.x - point.x,
+                refPoint.y - point.y,
+                refPoint.z - point.z
+            )
+            translationMap[translation] = translationMap.getOrDefault(translation, 0) + 1
+        }
+    }
+    val maxTranslation = translationMap.maxByOrNull { (_, points) -> points }
+    return if (maxTranslation == null || maxTranslation.value < 12) null else maxTranslation.key
 }
 
 private fun Collection<Scanner>.allPoints(): Set<Point> = fold(mutableSetOf()) { acc, scanner ->
     acc.also { acc.addAll(scanner.points) }
 }
 
-private inline fun Collection<Point>.iterate(operation: (Set<Point>) -> Unit) {
-    TODO()
-}
-
-private inline fun Set<Point>.rotate(operation: (Set<Point>) -> Unit) {
-    TODO()
-}
-
 private data class Point(val x: Int, val y: Int, val z: Int) {
-
-    fun belong(space: Space): Boolean = x in (space.xMin..space.xMax) &&
-            y in (space.yMin..space.yMax) &&
-            z in (space.zMin..space.zMax)
-
+    override fun toString(): String = "[$x,$y,$z]"
 }
 
-private data class Space(
-    val xMin: Int,
-    val xMax: Int,
-    val yMin: Int,
-    val yMax: Int,
-    val zMin: Int,
-    val zMax: Int
+private data class Scanner(
+    val id: String,
+    val points: List<Point>
 ) {
-    fun isOverlap(space: Space): Boolean = xMin <= space.xMax || space.xMin <= xMax &&
-            yMin <= space.yMax || space.yMin <= yMax &&
-            zMin <= space.zMax || space.zMin <= zMax
+    fun everyOrientation(): List<Scanner> = CoordinateSystem.all.map { coordinateSystem ->
+        copy(points = points.map { point ->
+            Point(
+                x = point.get(coordinateSystem.x),
+                y = point.get(coordinateSystem.y),
+                z = point.get(coordinateSystem.z),
+            )
+        })
+    }
 
-    infix fun and(space: Space): Space = Space(
-        xMin = max(xMin, space.xMin),
-        xMax = min(xMax, space.xMax),
-        yMin = max(yMin, space.yMin),
-        yMax = min(yMax, space.yMax),
-        zMin = max(zMin, space.zMin),
-        zMax = min(zMax, space.zMax)
+    fun translate(translation: Translation): Scanner = copy(points =
+    points.map { point ->
+        Point(
+            point.x + translation.x,
+            point.y + translation.y,
+            point.z + translation.z
+        )
+    }
     )
 }
 
-private data class Scanner(val points: List<Point>) {
-    val space = Space(
-        xMin = points.minOf { it.x },
-        xMax = points.maxOf { it.x },
-        yMin = points.minOf { it.y },
-        yMax = points.maxOf { it.y },
-        zMin = points.minOf { it.z },
-        zMax = points.maxOf { it.z }
-    )
+private data class Translation(
+    val x: Int,
+    val y: Int,
+    val z: Int
+)
 
-    fun checkOverlappingPoints(scanner: Scanner): Boolean {
-        if (!space.isOverlap(scanner.space)) return false
-        val overlap = space and scanner.space
-        val pointsFromA = points.filter { it.belong(overlap) }.toSet()
-        val pointsFromB = scanner.points.filter { it.belong(overlap) }.toSet()
-        return pointsFromA.isNotEmpty() && pointsFromA == pointsFromB
+private data class CoordinateSystem(
+    val x: Direction,
+    val y: Direction,
+    val z: Direction
+) {
+    companion object {
+        val all = listOf(
+            //z is up
+            CoordinateSystem(Direction.X, Direction.Y, Direction.Z),
+            CoordinateSystem(Direction.NEGATIVE_Y, Direction.X, Direction.Z),
+            CoordinateSystem(Direction.NEGATIVE_X, Direction.NEGATIVE_Y, Direction.Z),
+            CoordinateSystem(Direction.Y, Direction.NEGATIVE_X, Direction.Z),
+            //z is down
+            CoordinateSystem(Direction.Y, Direction.X, Direction.NEGATIVE_Z),
+            CoordinateSystem(Direction.NEGATIVE_X, Direction.Y, Direction.NEGATIVE_Z),
+            CoordinateSystem(Direction.NEGATIVE_Y, Direction.NEGATIVE_X, Direction.NEGATIVE_Z),
+            CoordinateSystem(Direction.X, Direction.NEGATIVE_Y, Direction.NEGATIVE_Z),
+            //x is up
+            CoordinateSystem(Direction.Y, Direction.Z, Direction.X),
+            CoordinateSystem(Direction.NEGATIVE_Z, Direction.Y, Direction.X),
+            CoordinateSystem(Direction.NEGATIVE_Y, Direction.NEGATIVE_Z, Direction.X),
+            CoordinateSystem(Direction.Z, Direction.NEGATIVE_Y, Direction.X),
+            //x is down
+            CoordinateSystem(Direction.Y, Direction.Z, Direction.NEGATIVE_X),
+            CoordinateSystem(Direction.NEGATIVE_Z, Direction.Y, Direction.NEGATIVE_X),
+            CoordinateSystem(Direction.NEGATIVE_Y, Direction.NEGATIVE_Z, Direction.NEGATIVE_X),
+            CoordinateSystem(Direction.Z, Direction.NEGATIVE_Y, Direction.NEGATIVE_X),
+            //y is up
+            CoordinateSystem(Direction.Z, Direction.X, Direction.Y),
+            CoordinateSystem(Direction.NEGATIVE_X, Direction.Z, Direction.Y),
+            CoordinateSystem(Direction.NEGATIVE_Z, Direction.NEGATIVE_X, Direction.Y),
+            CoordinateSystem(Direction.X, Direction.NEGATIVE_Z, Direction.Y),
+            //y is down
+            CoordinateSystem(Direction.Z, Direction.X, Direction.NEGATIVE_Y),
+            CoordinateSystem(Direction.NEGATIVE_X, Direction.Z, Direction.NEGATIVE_Y),
+            CoordinateSystem(Direction.NEGATIVE_Z, Direction.NEGATIVE_X, Direction.NEGATIVE_Y),
+            CoordinateSystem(Direction.X, Direction.NEGATIVE_Z, Direction.NEGATIVE_Y),
+        )
     }
+}
+
+private enum class Direction {
+    X, NEGATIVE_X, Y, NEGATIVE_Y, Z, NEGATIVE_Z
+}
+
+private fun Point.get(direction: Direction) = when (direction) {
+    Direction.X -> x
+    Direction.NEGATIVE_X -> -x
+    Direction.Y -> y
+    Direction.NEGATIVE_Y -> -y
+    Direction.Z -> z
+    Direction.NEGATIVE_Z -> -z
 }
