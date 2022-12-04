@@ -1,268 +1,175 @@
 package year2021.day23
 
 import readInput
-import java.util.ArrayDeque
+import kotlin.math.abs
 
 fun main() {
-    val testInput = readInput(2021, 23, "test").parse()
-    val input = readInput(2021, 23).parse()
+    val testInput = readInput(2021, 23, "test")
+    val input = readInput(2021, 23)
 
-    check(part1(testInput).also { println(it) } == 12521)
-    println("check")
+    check(part1(testInput) == 12521)
     println(part1(input))
 
-//    check(part2(testInput) == 2758514936282235)
-//    println(part2(input))
+    check(part2(testInput) == 44169)
+    println(part2(input))
 }
 
-private fun part1(input: State): Int = getMinRemainingScore(input) ?: 0
+private fun part1(input: List<String>): Int = organizeAmphipods(input)
 
-private fun part2(input: State): Int {
-    return 0
-}
+private fun part2(input: List<String>): Int = organizeAmphipods(
+    input.take(3) + "#D#C#B#A#" + "#D#B#A#C#" + input.takeLast(2)
+)
 
-var count = 0
-
-private fun getMinRemainingScore(
-    state: State,
-    depth: Int = 0,
-    cache: MutableMap<State, Int?> = mutableMapOf()
-): Int? {
-    cache[state]?.let { return it }
-    if (state.isFinal()) return 0
-    val possibleMoves = state.possibleMoves()
-    return possibleMoves.also {
-        if (count < 20) {
-            count++
-//            state.prettyPrint()
-//            println(it)
+private fun getPossibleMoves(burrow: Burrow): List<Pair<Int, Int>> = buildList {
+    fun pathExists(i1: Int, i2: Int): Boolean {
+        val min = minOf(i1, i2)
+        val max = maxOf(i1, i2)
+        return burrow.hallway.all { (index, value) ->
+            index !in (min + 1) until max || value == '.'
         }
-    }.mapIndexedNotNull { index, (from, to) ->
-        if (depth <= 1) {
-            println("depth: $depth progress: $index of ${possibleMoves.size}")
-        }
-        val (newState, cost) = state.performMove(from, to)
-        val minScore = getMinRemainingScore(newState, depth + 1, cache)
-        minScore?.let { it + cost }
-    }.minOrNull().also { cache[state] = it }
-}
+    }
 
-private fun List<String>.parse(): State = State(
-    state = listOf(
-        Box(),
-        Box(),
-        Room(
-            target = Amphipod.A,
-            stack = ArrayDeque<Amphipod>(2).apply {
-                push(Amphipod.valueOf(this@parse[3][3].toString()))
-                push(Amphipod.valueOf(this@parse[2][3].toString()))
+    burrow.hallway.forEach { (hindex, hvalue) ->
+        burrow.rooms.forEach inner@{ (rindex, rvalue) ->
+            // Both empty
+            if (hvalue == '.' && rvalue.isEmpty()) {
+                return@inner
             }
+
+            // Hallway to room (room compatible)
+            if (hvalue != '.') {
+                if (hvalue == roomAssignments[rindex]
+                    && rvalue.all { it == hvalue }
+                    && pathExists(hindex, rindex)
+                ) {
+                    add(hindex to rindex)
+                }
+                return@inner
+            }
+
+            // Room to hallway (hallway empty)
+            if (pathExists(rindex, hindex)
+                && rvalue.any { it != roomAssignments[rindex] }
+            ) {
+                add(rindex to hindex)
+            }
+        }
+    }
+}
+
+private fun execute(burrow: Burrow, move: Pair<Int, Int>): Pair<Burrow, Int> {
+    fun costFor(amphipod: Char) = when (amphipod) {
+        'A' -> 1
+        'B' -> 10
+        'C' -> 100
+        'D' -> 1000
+        else -> error("Invalid amphipod provided")
+    }
+
+    fun roomToHallway(burrow: Burrow, ri: Int, hi: Int): Pair<Burrow, Int> {
+        val room = burrow.rooms.getValue(ri)
+        val amphipod = room.first()
+
+        val upwards = burrow.roomSize - room.size + 1
+        val sideways = abs(ri - hi)
+        val cost = (upwards + sideways) * costFor(amphipod)
+
+        val modifiedBurrow = burrow.copy(
+            rooms = burrow.rooms.plus(ri to room.drop(1)),
+            hallway = burrow.hallway.plus(hi to amphipod),
+        )
+
+        return Pair(modifiedBurrow, cost)
+    }
+
+    fun hallwayToRoom(burrow: Burrow, hi: Int, ri: Int): Pair<Burrow, Int> {
+        val room = burrow.rooms.getValue(ri)
+        val amphipod = burrow.hallway.getValue(hi)
+
+        val sideways = abs(ri - hi)
+        val downwards = burrow.roomSize - room.size
+        val cost = (sideways + downwards) * costFor(amphipod)
+
+        val modifiedBurrow = burrow.copy(
+            rooms = burrow.rooms.plus(ri to listOf(amphipod) + room),
+            hallway = burrow.hallway.plus(hi to '.'),
+        )
+
+        return Pair(modifiedBurrow, cost)
+    }
+
+    return if (move.first in roomAssignments.keys) {
+        roomToHallway(burrow, move.first, move.second)
+    } else {
+        hallwayToRoom(burrow, move.first, move.second)
+    }
+}
+
+private fun organizeAmphipods(input: List<String>): Int {
+    val rooms = input.drop(2).dropLast(1).map { line ->
+        line.filter { char -> char in 'A'..'D' }
+    }
+    val a = rooms.map { it[0] }
+    val b = rooms.map { it[1] }
+    val c = rooms.map { it[2] }
+    val d = rooms.map { it[3] }
+
+    val initialBurrow = Burrow(
+        roomSize = a.size,
+        hallway = mapOf(
+            0 to '.',
+            1 to '.',
+            3 to '.',
+            5 to '.',
+            7 to '.',
+            9 to '.',
+            10 to '.',
         ),
-        Box(),
-        Room(
-            target = Amphipod.B,
-            stack = ArrayDeque<Amphipod>(2).apply {
-                push(Amphipod.valueOf(this@parse[3][5].toString()))
-                push(Amphipod.valueOf(this@parse[2][5].toString()))
-            }),
-        Box(),
-        Room(
-            target = Amphipod.C,
-            stack = ArrayDeque<Amphipod>(2).apply {
-                push(Amphipod.valueOf(this@parse[3][7].toString()))
-                push(Amphipod.valueOf(this@parse[2][7].toString()))
-            }),
-        Box(),
-        Room(
-            target = Amphipod.D,
-            stack = ArrayDeque<Amphipod>(2).apply {
-                push(Amphipod.valueOf(this@parse[3][9].toString()))
-                push(Amphipod.valueOf(this@parse[2][9].toString()))
-            }),
-        Box(),
-        Box()
+        rooms = mapOf(
+            2 to a,
+            4 to b,
+            6 to c,
+            8 to d,
+        ),
     )
+
+    var bestCost = Int.MAX_VALUE
+    val seen = mutableMapOf<Burrow, Int>()
+
+    fun simulate(prevBurrow: Burrow, move: Pair<Int, Int>, prevCost: Int): Int {
+        if (prevCost >= bestCost) return Int.MAX_VALUE
+
+        val (burrow, cost) = execute(prevBurrow, move)
+        val totalCost = prevCost + cost
+
+        if (burrow in seen) {
+            if (seen.getValue(burrow) <= totalCost) {
+                return Int.MAX_VALUE
+            }
+        }
+        seen[burrow] = totalCost
+
+        if (roomAssignments.all { (ri, amph) ->
+                val r = burrow.rooms.getValue(ri)
+                r.size == burrow.roomSize && r.all { it == amph }
+            }) {
+            if (totalCost < bestCost) bestCost = totalCost
+            return totalCost
+        }
+
+        val moves = getPossibleMoves(burrow)
+        if (moves.isEmpty()) return Int.MAX_VALUE
+        return moves.minOf { simulate(burrow, it, totalCost) }
+    }
+
+    return getPossibleMoves(initialBurrow).minOf { simulate(initialBurrow, it, 0) }
+}
+
+private data class Burrow(
+    val roomSize: Int,
+    val hallway: Map<Int, Char>,
+    val rooms: Map<Int, List<Char>>,
 )
 
-private val amphipodToRoomMap = mapOf(
-    Amphipod.A to 2,
-    Amphipod.B to 4,
-    Amphipod.C to 6,
-    Amphipod.D to 8
-)
+private val roomAssignments = mapOf(2 to 'A', 4 to 'B', 6 to 'C', 8 to 'D')
 
-private data class State(val state: List<Element>) {
-    fun possibleStart(): List<Int> = state.indices.filter {
-        when (val element = state[it]) {
-            is Room -> element.stack.isNotEmpty()
-            is Box -> element.amphipod != null
-        }
-    }
-
-    fun possibleFinish(start: Int): List<Int> {
-        val element = state[start]
-        val amphipod = when (element) {
-            is Box -> element.amphipod!!
-            is Room -> element.stack.peek()
-        }
-        val targetIndex = amphipodToRoomMap.getValue(amphipod)
-        val targetElement = state[targetIndex] as Room
-        if (targetIndex == start) {
-            if (targetElement.stack.size == 1) {
-                return emptyList()
-            }
-            if (targetElement.stack.size == 2) {
-                val copy = ArrayDeque(targetElement.stack)
-                copy.pop()
-                if (copy.peek() == amphipod) {
-                    return emptyList()
-                }
-            }
-        }
-        if (element is Box) {
-            val path = if (targetIndex > start) {
-                state.subList(start + 1, targetIndex + 1)
-            } else {
-                state.subList(targetIndex, start).reversed()
-            }
-            val isPathAvailable = path.all { element ->
-                when (element) {
-                    is Box -> element.amphipod == null
-                    is Room -> element.target != amphipod ||
-                            element.stack.isEmpty() ||
-                            (element.stack.size == 1 && element.stack.peek() == element.target)
-                }
-            }
-            if (isPathAvailable) return listOf(targetIndex)
-        } else {
-            return state.indices.filter { possibleTarget ->
-                val targetElement = state[possibleTarget]
-                if (targetElement is Box) {
-                    val path = if (possibleTarget > start) {
-                        state.subList(start + 1, possibleTarget + 1)
-                    } else {
-                        state.subList(possibleTarget, start).reversed()
-                    }
-                    val isPathAvailable = path.all {
-                        it is Room || (it is Box && it.amphipod == null)
-                    }
-                    isPathAvailable
-                } else {
-                    false
-                }
-            }
-        }
-        return emptyList()
-    }
-
-    fun possibleMoves(): List<Pair<Int, Int>> = possibleStart().flatMap { start ->
-        possibleFinish(start).map { start to it }
-    }
-
-    fun performMove(from: Int, to: Int): Pair<State, Int> {
-        val element = state[from]
-        val (amphipod, isBox) = when (element) {
-            is Box -> element.amphipod!! to true
-            is Room -> element.stack.peek() to false
-        }
-        val path = if (to > from) {
-            state.subList(from + 1, to + 1)
-        } else {
-            state.subList(to, from).reversed()
-        }
-        var points = 0
-        //walk out of room
-        if (element is Room) {
-            val steps = if (element.stack.size == 1) 2 else 1
-            points += steps * amphipod.weight
-        }
-        //walk
-        points += path.size * amphipod.weight
-        //walk in the room
-        val targetElement = state[to]
-        if (targetElement is Room) {
-            val steps = if (targetElement.stack.size == 1) 1 else 2
-            points += steps * amphipod.weight
-        }
-        return State(
-            state = state.mapIndexed { index, e ->
-                when {
-                    index == from && e is Box -> Box()
-                    index == from && e is Room -> Room(
-                        e.target,
-                        ArrayDeque(e.stack).apply { pop() })
-                    index == to && e is Box -> Box(amphipod)
-                    index == to && e is Room -> Room(
-                        e.target,
-                        ArrayDeque(e.stack).apply { push(amphipod) }
-                    )
-                    else -> e
-                }
-            }
-        ) to points
-    }
-
-    fun prettyPrint() {
-        println("#############")
-
-        print("#")
-        print(state.map {
-            when (it) {
-                is Box -> if (it.amphipod == null) "." else it.amphipod.name
-                is Room -> "."
-            }
-        }.joinToString(separator = ""))
-        println("#")
-
-        print("###")
-        val stackCopy1 = ArrayDeque((state[2] as Room).stack)
-        print(if (stackCopy1.size == 2) stackCopy1.pop().name else ".")
-        print("#")
-        val stackCopy2 = ArrayDeque((state[4] as Room).stack)
-        print(if (stackCopy2.size == 2) stackCopy2.pop().name else ".")
-        print("#")
-        val stackCopy3 = ArrayDeque((state[6] as Room).stack)
-        print(if (stackCopy3.size == 2) stackCopy3.pop().name else ".")
-        print("#")
-        val stackCopy4 = ArrayDeque((state[8] as Room).stack)
-        print(if (stackCopy4.size == 2) stackCopy4.pop().name else ".")
-        println("###")
-
-        print("  #")
-        print(if (stackCopy1.size == 1) stackCopy1.pop().name else ".")
-        print("#")
-        print(if (stackCopy2.size == 1) stackCopy2.pop().name else ".")
-        print("#")
-        print(if (stackCopy3.size == 1) stackCopy3.pop().name else ".")
-        print("#")
-        print(if (stackCopy4.size == 1) stackCopy4.pop().name else ".")
-        println("#")
-
-        println("  #########")
-    }
-
-    fun isFinal(): Boolean = state.all { it.isFinal }
-}
-
-private sealed class Element {
-    abstract val isFinal: Boolean
-}
-
-private data class Box(
-    val amphipod: Amphipod? = null
-) : Element() {
-    override val isFinal: Boolean = amphipod == null
-}
-
-private data class Room(
-    val target: Amphipod,
-    val stack: ArrayDeque<Amphipod>
-) : Element() {
-    override val isFinal: Boolean = ArrayDeque(stack).let {
-        it.size == 2 && it.pop() == target && it.pop() == target
-    }
-}
-
-private enum class Amphipod(val weight: Int) {
-    A(1), B(10), C(100), D(1000)
-}
