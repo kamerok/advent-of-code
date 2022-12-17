@@ -1,7 +1,6 @@
 package year2022.day17
 
 import readInput
-import java.io.File
 
 fun main() {
     val testInput = readInput(2022, 17, "test").first()
@@ -10,8 +9,8 @@ fun main() {
     check(part1(testInput) == 3068)
     println(part1(input))
 
-    check(part2_test() == 1_514_285_714_288L)
-    println(part2())
+    check(part2(testInput) == 1_514_285_714_288L)
+    println(part2(input))
 }
 
 private fun part1(input: String): Int {
@@ -22,25 +21,37 @@ private fun part1(input: String): Int {
     return game.getHeight()
 }
 
-private fun part2_test(): Long {
-    val iterations = 1000000000000L
-    val pattern =
-        listOf(1, 3, 3, 4, 0, 1, 2, 3, 0, 1, 1, 3, 2, 2, 0, 0, 2, 3, 4, 0, 1, 2, 1, 2, 0, 1, 2, 1, 2, 0, 1, 3, 2, 0, 0)
-    val tail = listOf(1, 3, 2, 1, 2, 1, 3, 2, 2, 0, 1, 3, 2, 0, 2)
-    val patternCount = iterations / pattern.size
+private fun part2(input: String): Long {
+    val diffList = mutableListOf<Int>()
+    val game = Game(input)
+    var oldHeight = 0
+    repeat(100000) {
+        game.placeRock()
+        diffList.add(game.getHeight() - oldHeight)
+        oldHeight = game.getHeight()
+    }
 
-    return tail.sum().toLong() + pattern.sum().toLong() * patternCount
-}
+    val patternRange = findPattern(diffList.joinToString(""))
 
-private fun part2(): Long {
     val iterations = 1000000000000L
-    val pattern = File("src", "year2022/day17/pattern.txt").readLines().first().split(", ").map { it.toInt() }
-    val tail = File("src", "year2022/day17/tail.txt").readLines().first().split(", ").map { it.toInt() }
+    val pattern = diffList.subList(patternRange.first, patternRange.last)
+    val tail = diffList.take(patternRange.first)
     val headSize = (iterations - tail.size) % pattern.size
     val head = pattern.take(headSize.toInt())
     val patternCount = (iterations - tail.size) / pattern.size
 
     return tail.sum().toLong() + pattern.sum().toLong() * patternCount + head.sum()
+}
+
+private fun findPattern(data: String): IntRange {
+    for (i in data.indices) {
+        val pattern = data.substring(i, i + 20).toRegex()
+        if (pattern.findAll(data).count() > 10) {
+            val nextRange = pattern.find(data, i + 1)!!.range
+            return i .. nextRange.first
+        }
+    }
+    return 0..0
 }
 
 private fun MutableList<BooleanArray>.findTopIndex(): Int =
